@@ -66,7 +66,7 @@ export default function HistoryView({
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
-  const { events, isLoading: eventsLoading, isConnected } = useUpcomingEvents();
+  const upcoming = useUpcomingEvents();
   const toneStylePrompt = useToneStylePrompt();
   const firstName = userName?.trim().split(/\s+/)[0];
   const hasHistory = history.length > 0;

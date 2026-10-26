@@ -10,10 +10,15 @@ export interface GoogleCalendar {
 
 export type CalendarResponseStatus = "needsAction" | "declined" | "tentative" | "accepted";
 
+export type CalendarItemType = "meeting" | "task";
+
 export interface CalendarEvent {
   id: string;
   calendar_id: string;
   provider: string;
+  item_type?: CalendarItemType;
+  is_completed?: number;
+  priority?: "low" | "medium" | "high";
   summary: string | null;
   start_time: string;
   end_time: string;
@@ -90,4 +95,28 @@ export interface CalendarAttendee {
 export interface Contact {
   email: string;
   display_name: string | null;
+}
+
+
+export interface CreateLocalCalendarItemInput {
+  summary: string;
+  item_type: CalendarItemType;
+  start_time: string;
+  end_time?: string;
+  is_all_day?: boolean;
+  hangout_link?: string;
+  priority?: "low" | "medium" | "high";
+  attendees?: string;
+}
+
+export interface UpdateLocalCalendarItemInput {
+  id: string;
+  summary?: string;
+  item_type?: CalendarItemType;
+  start_time?: string;
+  end_time?: string;
+  is_all_day?: boolean;
+  is_completed?: boolean;
+  priority?: "low" | "medium" | "high";
+  hangout_link?: string;
 }

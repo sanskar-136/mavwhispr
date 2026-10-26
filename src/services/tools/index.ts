@@ -7,7 +7,7 @@ import { updateNoteTool } from "./updateNoteTool";
 import { listFoldersTool } from "./listFoldersTool";
 import { clipboardTool } from "./clipboardTool";
 import { webSearchTool } from "./webSearchTool";
-import { calendarTool } from "./calendarTool";
+import { calendarTool, createCalendarItemTool, toggleCalendarTaskTool } from "./calendarTool";
 import { calendarAvailabilityTool } from "./calendarAvailabilityTool";
 import { createSnippetTool, createUpdateSnippetsTool, type SnippetActions } from "./snippetTool";
 import { createUpdateDictionaryTool, type DictionaryActions } from "./dictionaryTool";

@@ -228,7 +228,7 @@ const CALENDARS_TABLE_BY_PROVIDER = {
   microsoft: "microsoft_calendars",
 };
 
-const AVAILABILITY_PROVIDERS = new Set(["google", "microsoft", "apple"]);
+const AVAILABILITY_PROVIDERS = new Set(["google", "microsoft", "apple", "local"]);
 const SELECTED_CALENDAR_EVENT_FILTER = `(
   (provider = 'google' AND EXISTS (
     SELECT 1 FROM google_calendars WHERE google_calendars.id = calendar_events.calendar_id
@@ -1021,6 +1021,18 @@ class DatabaseManager {
           if (!err.message.includes("duplicate column")) throw err;
         }
       }
+      for (const [col, def] of [
+        ["item_type", "TEXT NOT NULL DEFAULT 'meeting'"],
+        ["is_completed", "INTEGER NOT NULL DEFAULT 0"],
+        ["priority", "TEXT DEFAULT 'medium'"],
+      ]) {
+        try {
+          this.db.exec(`ALTER TABLE calendar_events ADD COLUMN ${col} ${def}`);
+        } catch (err) {
+          if (!err.message.includes("duplicate column")) throw err;
+        }
+      }
+
       if (availabilitySchemaChanged) {
         // Existing incremental tokens will not resend unchanged free/declined
         // events, so rebuild both REST caches once with the new semantics.
@@ -6025,6 +6037,148 @@ class DatabaseManager {
       return { success: true };
     } catch (error) {
       debugLogger.error("Error replacing Apple calendar events", { error: error.message }, "acal");
+      throw error;
+    }
+  }
+
+  createLocalCalendarItem(item) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const id = item.id || `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const calendarId = "default";
+      const provider = "local";
+      const itemType = item.item_type || "meeting";
+      const isCompleted = item.is_completed ? 1 : 0;
+      const priority = item.priority || "medium";
+      const summary = item.summary || (itemType === "task" ? "New Task" : "New Meeting");
+      const startTime = item.start_time;
+      const endTime = item.end_time || item.start_time;
+      const isAllDay = item.is_all_day ? 1 : 0;
+      const status = "confirmed";
+      const availabilityStatus = itemType === "task" ? "free" : "busy";
+      const selfResponseStatus = "accepted";
+      const hangoutLink = item.hangout_link || null;
+      const attendees = item.attendees || null;
+      const attendeesCount = attendees ? 1 : 0;
+
+      const stmt = this.db.prepare(
+        `INSERT OR REPLACE INTO calendar_events (
+          id, calendar_id, provider, item_type, is_completed, priority,
+          summary, start_time, end_time, is_all_day, status,
+          availability_status, self_response_status, hangout_link,
+          conference_data, organizer_email, attendees_count, attendees,
+          web_link, synced_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, CURRENT_TIMESTAMP)`
+      );
+
+      stmt.run(
+        id,
+        calendarId,
+        provider,
+        itemType,
+        isCompleted,
+        priority,
+        summary,
+        startTime,
+        endTime,
+        isAllDay,
+        status,
+        availabilityStatus,
+        selfResponseStatus,
+        hangoutLink,
+        attendeesCount,
+        attendees
+      );
+
+      return { success: true, item: this.getCalendarEventById(id) };
+    } catch (error) {
+      debugLogger.error("Error creating local calendar item", { error: error.message }, "calendar");
+      throw error;
+    }
+  }
+
+  updateLocalCalendarItem(id, updates) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const existing = this.getCalendarEventById(id);
+      if (!existing) throw new Error(`Calendar item not found: ${id}`);
+
+      const summary = updates.summary !== undefined ? updates.summary : existing.summary;
+      const itemType = updates.item_type !== undefined ? updates.item_type : (existing.item_type || "meeting");
+      const startTime = updates.start_time !== undefined ? updates.start_time : existing.start_time;
+      const endTime = updates.end_time !== undefined ? updates.end_time : existing.end_time;
+      const isAllDay = updates.is_all_day !== undefined ? (updates.is_all_day ? 1 : 0) : existing.is_all_day;
+      const isCompleted = updates.is_completed !== undefined ? (updates.is_completed ? 1 : 0) : (existing.is_completed || 0);
+      const priority = updates.priority !== undefined ? updates.priority : (existing.priority || "medium");
+      const hangoutLink = updates.hangout_link !== undefined ? updates.hangout_link : existing.hangout_link;
+
+      this.db.prepare(
+        `UPDATE calendar_events
+         SET summary = ?, item_type = ?, start_time = ?, end_time = ?, is_all_day = ?,
+             is_completed = ?, priority = ?, hangout_link = ?
+         WHERE id = ?`
+      ).run(summary, itemType, startTime, endTime, isAllDay, isCompleted, priority, hangoutLink, id);
+
+      return { success: true, item: this.getCalendarEventById(id) };
+    } catch (error) {
+      debugLogger.error("Error updating local calendar item", { error: error.message }, "calendar");
+      throw error;
+    }
+  }
+
+  toggleCalendarTask(id, isCompleted) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const completedVal = isCompleted ? 1 : 0;
+      this.db.prepare(
+        "UPDATE calendar_events SET is_completed = ? WHERE id = ?"
+      ).run(completedVal, id);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error toggling task completion", { error: error.message }, "calendar");
+      throw error;
+    }
+  }
+
+  deleteLocalCalendarItem(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db.prepare("DELETE FROM calendar_events WHERE id = ?").run(id);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error deleting local calendar item", { error: error.message }, "calendar");
+      throw error;
+    }
+  }
+
+  getWeekScheduleItems(rangeStartIso, rangeEndIso) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const sql = `
+        SELECT * FROM calendar_events
+        WHERE status IN ('confirmed', 'tentative')
+          AND (
+            (datetime(start_time) >= datetime(?) AND datetime(start_time) <= datetime(?))
+            OR (datetime(end_time) >= datetime(?) AND datetime(end_time) <= datetime(?))
+            OR (datetime(start_time) <= datetime(?) AND datetime(end_time) >= datetime(?))
+            OR (date(start_time) >= date(?) AND date(start_time) <= date(?))
+          )
+        ORDER BY datetime(start_time) ASC
+      `;
+      const rows = this.db.prepare(sql).all(
+        rangeStartIso, rangeEndIso,
+        rangeStartIso, rangeEndIso,
+        rangeStartIso, rangeEndIso,
+        rangeStartIso, rangeEndIso
+      );
+      return rows.map((r) => ({
+        ...r,
+        item_type: r.item_type || "meeting",
+        is_completed: r.is_completed ? 1 : 0,
+        priority: r.priority || "medium",
+      }));
+    } catch (error) {
+      debugLogger.error("Error getting week schedule items", { error: error.message }, "calendar");
       throw error;
     }
   }

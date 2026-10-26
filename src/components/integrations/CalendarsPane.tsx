@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { CalendarDays, Loader2, Mail, Plus, Unlink } from "../icons";
+import { CalendarDays, Check, Loader2, Mail, Plus, Unlink } from "../icons";
 import { Button } from "../ui/button";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
 import { Badge } from "../ui/badge";
@@ -17,40 +17,92 @@ import microsoftCalendarIcon from "../../assets/icons/microsoft-calendar.webp";
 import appleCalendarIcon from "../../assets/icons/apple-calendar.svg";
 
 interface ProviderRowProps {
-  icon: string;
-  i18nKey: string;
+  icon: string | ReactElement;
+  title?: string;
+  description?: string;
+  i18nKey?: string;
   connected: boolean;
-  isConnecting: boolean;
-  onConnect: () => void;
+  isConnecting?: boolean;
+  onConnect?: () => void;
+  isDefault?: boolean;
+  showSetDefault?: boolean;
+  onSetDefault?: () => void;
+  badgeText?: string;
+  badgeVariant?: "success" | "outline" | "secondary";
 }
 
-function ProviderRow({ icon, i18nKey, connected, isConnecting, onConnect }: ProviderRowProps) {
+function ProviderRow({
+  icon,
+  i18nKey,
+  title,
+  description,
+  connected,
+  isConnecting = false,
+  onConnect,
+  isDefault = false,
+  showSetDefault = false,
+  onSetDefault,
+  badgeText,
+  badgeVariant = "success",
+}: ProviderRowProps) {
   const { t } = useTranslation();
+  const displayTitle = title ?? (i18nKey ? t(`${i18nKey}.title`) : "");
+  const displayDescription = description ?? (i18nKey ? t(`${i18nKey}.description`) : "");
+  const displayConnectedBadge = badgeText ?? (i18nKey ? t(`${i18nKey}.connected`) : "Connected");
+
   return (
     <SettingsPanelRow>
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10 flex items-center justify-center shrink-0">
-          <img src={icon} alt="" className="w-5 h-5" />
+          {typeof icon === "string" ? (
+            <img src={icon} alt="" className="w-5 h-5" />
+          ) : (
+            icon
+          )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground">{t(`${i18nKey}.title`)}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold text-foreground">{displayTitle}</p>
+            {isDefault && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary border border-primary/20">
+                <Check className="w-2.5 h-2.5" />
+                Primary Default
+              </span>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-            {t(`${i18nKey}.description`)}
+            {displayDescription}
           </p>
         </div>
-        {connected ? (
-          <Badge variant="success" className="shrink-0">
-            {t(`${i18nKey}.connected`)}
-          </Badge>
-        ) : (
-          <Button size="sm" onClick={onConnect} disabled={isConnecting} className="shrink-0">
-            {isConnecting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              t(`${i18nKey}.connect`)
-            )}
-          </Button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {connected ? (
+            <>
+              <Badge variant={badgeVariant} className="shrink-0">
+                {displayConnectedBadge}
+              </Badge>
+              {showSetDefault && !isDefault && onSetDefault && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onSetDefault}
+                  className="shrink-0 text-xs h-7 px-2.5 hover:border-primary hover:text-primary transition-colors"
+                >
+                  Set as Default
+                </Button>
+              )}
+            </>
+          ) : (
+            onConnect && (
+              <Button size="sm" onClick={onConnect} disabled={isConnecting} className="shrink-0">
+                {isConnecting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  i18nKey ? t(`${i18nKey}.connect`) : "Connect"
+                )}
+              </Button>
+            )
+          )}
+        </div>
       </div>
     </SettingsPanelRow>
   );
@@ -148,6 +200,8 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
     setMcalPrimaryOnly,
     appleCalendarConnected,
     setAppleCalendarConnected,
+    preferredCalendarProvider,
+    setPreferredCalendarProvider,
   } = useSettingsStore();
   const [isConnecting, setIsConnecting] = useState(false);
   const [disconnectingEmail, setDisconnectingEmail] = useState<string | null>(null);
@@ -328,15 +382,48 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
     return () => unsub?.();
   }, [isMac, setAppleCalendarConnected]);
 
+  useEffect(() => {
+    if (preferredCalendarProvider === "google" && gcalAccounts.length === 0) {
+      setPreferredCalendarProvider("local");
+    } else if (preferredCalendarProvider === "microsoft" && mcalAccounts.length === 0) {
+      setPreferredCalendarProvider("local");
+    } else if (preferredCalendarProvider === "apple" && !appleCalendarConnected) {
+      setPreferredCalendarProvider("local");
+    }
+  }, [
+    preferredCalendarProvider,
+    gcalAccounts.length,
+    mcalAccounts.length,
+    appleCalendarConnected,
+    setPreferredCalendarProvider,
+  ]);
+
   return (
     <IntegrationsPane title={title} description={t("integrations.notABot.description")}>
       <SettingsPanel>
+        {/* Default Local Calendar (Offline SQLite) */}
+        <ProviderRow
+          icon={<CalendarDays className="w-5 h-5 text-indigo-500" />}
+          title="Default Local Calendar"
+          description="Offline SQLite calendar for your meetings and tasks. Always ready, private, and no external account required."
+          connected={true}
+          badgeText="Active (Offline)"
+          badgeVariant="secondary"
+          isDefault={preferredCalendarProvider === "local"}
+          showSetDefault={true}
+          onSetDefault={() => setPreferredCalendarProvider("local")}
+        />
+
+        {/* Google Calendar */}
         <ProviderRow
           icon={googleCalendarIcon}
           i18nKey="integrations.googleCalendar"
           connected={gcalAccounts.length > 0}
           isConnecting={isConnecting}
           onConnect={handleConnect}
+          isDefault={preferredCalendarProvider === "google" && gcalAccounts.length > 0}
+          showSetDefault={gcalAccounts.length > 0}
+          onSetDefault={() => setPreferredCalendarProvider("google")}
         />
         <CalendarAccountRows
           i18nKey="integrations.googleCalendar"
@@ -349,12 +436,16 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
           onAddAnother={handleConnect}
         />
 
+        {/* Microsoft Calendar */}
         <ProviderRow
           icon={microsoftCalendarIcon}
           i18nKey="integrations.microsoftCalendar"
           connected={mcalAccounts.length > 0}
           isConnecting={isMsConnecting}
           onConnect={handleMicrosoftConnect}
+          isDefault={preferredCalendarProvider === "microsoft" && mcalAccounts.length > 0}
+          showSetDefault={mcalAccounts.length > 0}
+          onSetDefault={() => setPreferredCalendarProvider("microsoft")}
         />
         <CalendarAccountRows
           i18nKey="integrations.microsoftCalendar"
@@ -367,6 +458,7 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
           onAddAnother={handleMicrosoftConnect}
         />
 
+        {/* Apple Calendar (macOS only) */}
         {isMac && (
           <ProviderRow
             icon={appleCalendarIcon}
@@ -374,6 +466,9 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
             connected={appleCalendarConnected}
             isConnecting={isAppleConnecting}
             onConnect={handleAppleConnect}
+            isDefault={preferredCalendarProvider === "apple" && appleCalendarConnected}
+            showSetDefault={appleCalendarConnected}
+            onSetDefault={() => setPreferredCalendarProvider("apple")}
           />
         )}
 

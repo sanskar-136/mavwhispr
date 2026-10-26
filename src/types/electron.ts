@@ -3247,6 +3247,12 @@ declare global {
       onConnectorConnectProgress?: (
         callback: (progress: ConnectorConnectProgress) => void
       ) => () => void;
+            calendarCreateLocalItem?: (item: any) => Promise<{ success: boolean; item?: any; error?: string }>;
+      calendarUpdateLocalItem?: (id: string, updates: any) => Promise<{ success: boolean; item?: any; error?: string }>;
+      calendarToggleTask?: (id: string, isCompleted: boolean) => Promise<{ success: boolean; error?: string }>;
+      calendarDeleteLocalItem?: (id: string) => Promise<{ success: boolean; error?: string }>;
+      calendarGetWeekSchedule?: (rangeStart: string, rangeEnd: string) => Promise<{ success: boolean; items: any[] }>;
+      onCalendarEventsSynced?: (callback: () => void) => () => void;
       calendarGetAvailability?: (
         request: CalendarAvailabilityRequest
       ) => Promise<

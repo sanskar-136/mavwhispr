@@ -923,6 +923,7 @@ export interface SettingsState
   gcalPrimaryOnly: boolean;
   mcalPrimaryOnly: boolean;
   appleCalendarConnected: boolean;
+  preferredCalendarProvider: "local" | "google" | "microsoft" | "apple";
   meetingProcessDetection: boolean;
   speakerDiarizationEnabled: boolean;
   dictationSileroEnabled: boolean;
@@ -1251,6 +1252,7 @@ export interface SettingsState
   setGcalPrimaryOnly: (value: boolean) => void;
   setMcalPrimaryOnly: (value: boolean) => void;
   setAppleCalendarConnected: (value: boolean) => void;
+  setPreferredCalendarProvider: (provider: "local" | "google" | "microsoft" | "apple") => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
   setDictationSileroEnabled: (value: boolean) => void;
@@ -1695,6 +1697,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   gcalPrimaryOnly: readBoolean("gcalPrimaryOnly", true),
   mcalPrimaryOnly: readBoolean("mcalPrimaryOnly", true),
   appleCalendarConnected: readBoolean("appleCalendarConnected", false),
+  preferredCalendarProvider:
+    (readString("preferredCalendarProvider", "local") as
+      | "local"
+      | "google"
+      | "microsoft"
+      | "apple") || "local",
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
   // Off by default: VAD on pause-heavy dictations can strip the speech and make
@@ -2497,6 +2505,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) window.electronAPI?.mcalSetPrimaryOnly?.(value);
   },
   setAppleCalendarConnected: createBooleanSetter("appleCalendarConnected"),
+  setPreferredCalendarProvider: (provider: "local" | "google" | "microsoft" | "apple") => {
+    if (isBrowser) localStorage.setItem("preferredCalendarProvider", provider);
+    useSettingsStore.setState({ preferredCalendarProvider: provider });
+  },
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
   setSpeakerDiarizationEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("speakerDiarizationEnabled", String(value));

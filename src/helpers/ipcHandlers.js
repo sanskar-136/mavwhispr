@@ -12257,6 +12257,59 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("calendar-create-local-item", async (_event, item) => {
+      try {
+        const result = this.databaseManager.createLocalCalendarItem(item);
+        broadcastToWindows("gcal-events-synced", {});
+        broadcastToWindows("calendar-events-synced", {});
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("calendar-update-local-item", async (_event, id, updates) => {
+      try {
+        const result = this.databaseManager.updateLocalCalendarItem(id, updates);
+        broadcastToWindows("gcal-events-synced", {});
+        broadcastToWindows("calendar-events-synced", {});
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("calendar-toggle-task", async (_event, id, isCompleted) => {
+      try {
+        const result = this.databaseManager.toggleCalendarTask(id, isCompleted);
+        broadcastToWindows("gcal-events-synced", {});
+        broadcastToWindows("calendar-events-synced", {});
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("calendar-delete-local-item", async (_event, id) => {
+      try {
+        const result = this.databaseManager.deleteLocalCalendarItem(id);
+        broadcastToWindows("gcal-events-synced", {});
+        broadcastToWindows("calendar-events-synced", {});
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("calendar-get-week-schedule", async (_event, rangeStart, rangeEnd) => {
+      try {
+        const items = this.databaseManager.getWeekScheduleItems(rangeStart, rangeEnd);
+        return { success: true, items };
+      } catch (error) {
+        return { success: false, items: [] };
+      }
+    });
+
     ipcMain.handle("gcal-get-event", async (_event, eventId) => {
       try {
         const event = this.databaseManager.getCalendarEventById(eventId);

@@ -397,6 +397,60 @@ class CliBridge {
 
     return [
       exact("GET", "/v1/health", () => ({ data: { ok: true, version: 1 } })),
+      // Calendar endpoints for Laya & external automation
+      exact("GET", "/v1/calendar/list", ({ query }) => {
+        const start = query.get("start") || new Date().toISOString();
+        const end = query.get("end") || new Date(Date.now() + 7 * 86400000).toISOString();
+        const items = db.getWeekScheduleItems(start, end);
+        return { data: items, has_more: false };
+      }),
+      exact(
+        "POST",
+        "/v1/calendar/create",
+        ({ body }) => {
+          if (!body.summary) {
+            const err = new Error("'summary' is required");
+            err.code = "VALIDATION";
+            throw err;
+          }
+          const result = db.createLocalCalendarItem({
+            summary: body.summary,
+            item_type: body.item_type || "meeting",
+            start_time: body.start_time || new Date().toISOString(),
+            end_time: body.end_time || body.start_time || new Date().toISOString(),
+            is_all_day: body.is_all_day,
+            hangout_link: body.hangout_link,
+            priority: body.priority,
+          });
+          setImmediate(() => {
+            broadcastToWindows("calendar-events-synced", {});
+            broadcastToWindows("gcal-events-synced", {});
+          });
+          return { data: result.item };
+        },
+        201
+      ),
+      exact("POST", "/v1/calendar/toggle-task", ({ body }) => {
+        if (!body.id) {
+          const err = new Error("'id' is required");
+          err.code = "VALIDATION";
+          throw err;
+        }
+        const result = db.toggleCalendarTask(body.id, !!body.completed);
+        setImmediate(() => {
+          broadcastToWindows("calendar-events-synced", {});
+          broadcastToWindows("gcal-events-synced", {});
+        });
+        return { data: result };
+      }),
+      param("DELETE", "/v1/calendar/", "", "id", ({ params }) => {
+        db.deleteLocalCalendarItem(params.id);
+        setImmediate(() => {
+          broadcastToWindows("calendar-events-synced", {});
+          broadcastToWindows("gcal-events-synced", {});
+        });
+        return NO_CONTENT;
+      }),
       exact("GET", "/v1/notes/list", ({ query }) => {
         const noteType = query.get("note_type") || null;
         const limit = parsePositiveIntQuery(query, "limit", 100);

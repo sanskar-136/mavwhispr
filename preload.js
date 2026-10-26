@@ -1359,6 +1359,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("connector-connect-progress", listener);
     return () => ipcRenderer.removeListener("connector-connect-progress", listener);
   },
+    calendarCreateLocalItem: (item) => ipcRenderer.invoke("calendar-create-local-item", item),
+  calendarUpdateLocalItem: (id, updates) =>
+    ipcRenderer.invoke("calendar-update-local-item", id, updates),
+  calendarToggleTask: (id, isCompleted) =>
+    ipcRenderer.invoke("calendar-toggle-task", id, isCompleted),
+  calendarDeleteLocalItem: (id) => ipcRenderer.invoke("calendar-delete-local-item", id),
+  calendarGetWeekSchedule: (rangeStart, rangeEnd) =>
+    ipcRenderer.invoke("calendar-get-week-schedule", rangeStart, rangeEnd),
+  onCalendarEventsSynced: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("calendar-events-synced", listener);
+    return () => ipcRenderer.removeListener("calendar-events-synced", listener);
+  },
   calendarGetAvailability: (request) => ipcRenderer.invoke("calendar-get-availability", request),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
   calendarGetLinkableEvents: () => ipcRenderer.invoke("calendar-get-linkable-events"),
